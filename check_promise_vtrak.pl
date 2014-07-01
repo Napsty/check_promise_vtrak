@@ -32,6 +32,7 @@
 # 20140627 Added enclosure check type (ck)
 # 20140701 Extended disk check with different subchecks (ck)
 # 20140701 Added ps check type (ck)
+# 20140701 Added fan check type (ck)
 #########################################################################
 my $version = '20140701';
 #########################################################################
@@ -135,10 +136,11 @@ Options:
 -t\tType to check. See below for valid types.
 --help\tShow this help/usage.\n
 Check Types:
-info\t\t -> Show basic information of the Vtrak
 disk\t\t -> Checks the current status of all physical disks
-diskonline\t -> Checks if all disks presented are also online
-enclosure\t -> Check status of all enclosures\n";
+enclosure\t -> Check status of all enclosures
+fan\t\t -> Check status of all fans (blowers)
+info\t\t -> Show basic information of the Vtrak
+ps\t\t -> Check status of all power supplies\n";
 }
 #########################################################################
 # OID Definition
@@ -498,6 +500,44 @@ case "ps" {
   }
   else {
     print "POWER SUPPLY OK - $pscount power supplies attached\n";
+    exit 0
+  }
+
+}
+# --------- fan --------- #
+# Checks the health status of all fans (blowers)
+case "fan" {
+  my $result = $session->get_table(-baseoid => $oid_fan_opstatus);
+
+  if (!defined($result)) {
+    printf("ERROR: Description table : %s.\n", $session->error);
+  if ($session->error =~ m/noSuchName/ || $session->error =~ m/does not exist/) {
+    print "Are you really sure the target host is a $model???!\n";
+  }
+  $session->close;
+  exit 2;
+ }
+
+  my %value = %{$result};
+  my $key;
+  my $fancount = keys %{$result};
+  my $problemcount = 0;
+
+
+  foreach $key (keys %{$result}) {
+    #print "Key: $key\n"; # debug
+    #print "Value: $value{$key}\n"; # debug
+    if( ( "$value{$key}" ne "Functional" ) ) {
+      $problemcount++;
+    }
+  }
+
+  if ( $problemcount > 0 ) {
+    print "FANS CRITICAL - $problemcount fan(s) not ok\n";
+    exit 2
+  }
+  else {
+    print "FANS OK - $fancount fans attached and functional\n";
     exit 0
   }
 
