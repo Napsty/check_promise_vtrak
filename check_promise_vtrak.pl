@@ -31,6 +31,7 @@
 # 20140626 Fork/rewrite for multiple Vtrack models (ck)
 # 20140627 Added enclosure check type (ck)
 # 20140701 Extended disk check with different subchecks (ck)
+# 20140701 Added ps check type (ck)
 #########################################################################
 my $version = '20140627';
 #########################################################################
@@ -326,6 +327,7 @@ case "disk" {
     $diskmessage .= "$disk_offline disk(s) offline ";
     $diskproblem++;
   }
+  # Check for missing disks
   elsif ( $disk_missing > 0 ) {
     $diskmessage .= "$disk_missing disk(s) missing ";
     $diskproblem++;
@@ -458,6 +460,44 @@ case "enclosure" {
   }
   else {
     print "ENCLOSURE OK - $enclcount enclosure(s) attached\n";
+    exit 0
+  }
+
+}
+# --------- ps --------- #
+# Checks the health status of all power supplies
+case "ps" {
+  my $result = $session->get_table(-baseoid => $oid_ps_opstatus);
+
+  if (!defined($result)) {
+    printf("ERROR: Description table : %s.\n", $session->error);
+  if ($session->error =~ m/noSuchName/ || $session->error =~ m/does not exist/) {
+    print "Are you really sure the target host is a $model???!\n";
+  }
+  $session->close;
+  exit 2;
+ }
+
+  my %value = %{$result};
+  my $key;
+  my $pscount = keys %{$result};
+  my $problemcount = 0;
+
+
+  foreach $key (keys %{$result}) {
+    #print "Key: $key\n"; # debug
+    #print "Value: $value{$key}\n"; # debug
+    if( ( "$value{$key}" ne "Powered On and Functional" ) ) {
+      $problemcount++;
+    }
+  }
+
+  if ( $problemcount > 0 ) {
+    print "POWER SUPPLY CRITICAL - $problemcount power supply not ok\n";
+    exit 2
+  }
+  else {
+    print "POWER SUPPLY OK - $pscount power supplies attached\n";
     exit 0
   }
 
