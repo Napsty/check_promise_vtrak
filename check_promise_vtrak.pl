@@ -33,7 +33,7 @@
 # 20140701 Extended disk check with different subchecks (ck)
 # 20140701 Added ps check type (ck)
 #########################################################################
-my $version = '20140627';
+my $version = '20140701';
 #########################################################################
 use strict;
 use Getopt::Long;
