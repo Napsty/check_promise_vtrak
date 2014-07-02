@@ -34,6 +34,7 @@
 # 20140701 Added ps check type (ck)
 # 20140701 Added fan check type (ck)
 # 20140702 Added ctrl check type (ck)
+# 20140702 Merged disk and diskonline checks (ck)
 #########################################################################
 my $version = '20140702';
 #########################################################################
@@ -367,55 +368,13 @@ case "disk" {
     print "DISK WARNING - $diskwarn DISK WARNINGS ( $diskmessage)\n";
     exit 1
   }
+  elsif ( $disk_present != $disk_online ) {
+    print "DISK WARNING - $disk_present disks are present but only $disk_online are online\n";
+    exit 1
+  }
   else {
     print "DISK OK - $diskcount DISKS ($disk_online online)\n";
     exit 0
-  }
-
-
-}
-# --------- diskonline --------- #
-# This is a very special case. I had a case where a physical disk was not detected by 
-# the enclosure (Slot X: Empty) but the physical disk was in the slot.
-# This check compares the number of present disks versus the number of online disks.
-case "diskonline" {
-  my $result = $session->get_table(-baseoid => $oid_disk_present);
-  my $result2 = $session->get_table(-baseoid => $oid_disk_online);
-
-  if (!defined($result) || !defined($result2)) {
-    printf("ERROR: Description table : %s.\n", $session->error);
-  if ($session->error =~ m/noSuchName/ || $session->error =~ m/does not exist/) {
-    print "Are you really sure the target host is a $model???!\n";
-  }
-  $session->close;
-  exit 2;
-  }
-
-  my %value = %{$result};
-  my %value2 = %{$result2};
-  my $key;
-  my $present = 0;
-  my $online = 0;
-
-  foreach $key (keys %{$result}) {
-    #print "$key\n"; # debug
-    #print "$value{$key}\n"; # debug
-    $present = $present + $value{$key};
-  }
-
-  foreach $key (keys %{$result2}) {
-    #print "$key\n"; # debug
-    #print "$value2{$key}\n"; # debug
-    $online = $online + $value2{$key};
-  }
-
-  if ( $present != $online ) {
-    print "DISKONLINE WARNING: $present disks are present but only $online are online. Please check.\n";
-    exit 1;
-  }
-  else {
-    print "DISKONLINE OK - Disks present: $present - Disks online: $online\n";
-    exit 0;
   }
 
 
