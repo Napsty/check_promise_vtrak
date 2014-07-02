@@ -33,8 +33,9 @@
 # 20140701 Extended disk check with different subchecks (ck)
 # 20140701 Added ps check type (ck)
 # 20140701 Added fan check type (ck)
+# 20140702 Added ctrl check type (ck)
 #########################################################################
-my $version = '20140701';
+my $version = '20140702';
 #########################################################################
 use strict;
 use Getopt::Long;
@@ -47,6 +48,8 @@ my $port = '';
 my $community = '';
 my $model = '';
 my $type = '';
+my $warning = '';
+my $critical = '';
 my $help = '';
 my $status;
 my $TIMEOUT = 10;
@@ -65,8 +68,9 @@ my $oid_model = '';
 my $oid_vendorname = '';
 my $oid_serialnumber = '';
 my $oid_firmware = '';
+my $oid_ctrl_present = '';
 my $oid_ctrl_opstatus = '';
-my $oid_ctrl_activestatus = '';
+my $oid_ctrl_readiness = '';
 my $oid_encl_id = '';
 my $oid_encl_count = '';
 my $oid_encl_type = '';
@@ -134,9 +138,12 @@ Options:
 -C\tSNMP community name (if not set, public will be used).
 -m\tModel of the Vtrak. Currently supported: E310x, E610x, M610x
 -t\tType to check. See below for valid types.
+-w\tWarning threshold (not working on all checks)
+-c\tCritical threshold (not working on all checks)
 --help\tShow this help/usage.\n
 Check Types:
-disk\t\t -> Checks the current status of all physical disks
+ctrl\t\t -> Checks the status of all controllers
+disk\t\t -> Checks the status of all physical disks
 enclosure\t -> Check status of all enclosures
 fan\t\t -> Check status of all fans (blowers)
 info\t\t -> Show basic information of the Vtrak
@@ -150,8 +157,9 @@ if ( $model =~ m/(E310|E610|M610)/) {
   $oid_vendorname = "$oid_base.1.2.1.3.1";
   $oid_serialnumber = "$oid_base.1.2.1.5.1";
   $oid_firmware = "$oid_base.1.3.1.13.1.1";
+  $oid_ctrl_present = "$oid_base.1.1.1.7.1";
   $oid_ctrl_opstatus = "$oid_base.1.3.1.15.1";
-  $oid_ctrl_activestatus = "$oid_base.1.3.1.17.1";
+  $oid_ctrl_readiness = "$oid_base.1.3.1.17.1";
   $oid_encl_id = "$oid_base.1.10.1.1.1";
   $oid_encl_type = "$oid_base.1.10.1.2.1";
   $oid_encl_count = "$oid_base.1.1.1.9.1";
@@ -538,6 +546,60 @@ case "fan" {
   }
   else {
     print "FANS OK - $fancount fans attached and functional\n";
+    exit 0
+  }
+
+}
+# --------- ctrl --------- #
+# Checks the health status of all controllers
+case "ctrl" {
+  my $result = $session->get_table(-baseoid => $oid_ctrl_opstatus);
+  my @oidlist = ($oid_ctrl_present);
+  my $result2 = $session->get_request(-varbindlist => \@oidlist);
+
+  if (!defined($result) || !defined($result2)) {
+    printf("ERROR: Description table : %s.\n", $session->error);
+  if ($session->error =~ m/noSuchName/ || $session->error =~ m/does not exist/) {
+    print "Are you really sure the target host is a $model???!\n";
+  }
+  $session->close;
+  exit 2;
+ }
+
+  my %value = %{$result};
+  my $key;
+  my $ctrlcount = $$result2{$oid_ctrl_present};
+  my $problemcount = 0;
+  my $problemmsg = '';
+
+  foreach $key (keys %{$result}) {
+    #print "Key: $key\n"; # debug
+    #print "Value: $value{$key}\n"; # debug
+    my $oidend = (split(/\./, $key))[-1];
+    if ( "$value{$key}" eq "Not Present" ) {
+      # do nothing
+    }
+    elsif( ( "$value{$key}" ne "OK" ) ) {
+      $problemcount++;
+      $problemmsg .= "controller not ok ";
+    }
+    # get the readiness state of the controller
+    my @oidlist = ("$oid_ctrl_readiness.$oidend");
+    my $response = $session->get_request(-varbindlist => \@oidlist);
+    my $readiness = $$response{"$oid_ctrl_readiness.$oidend"};
+    #print "Readiness: $readiness\n"; # debug
+    if ( "$readiness" ne "Active" &&  "$value{$key}" ne "Not Present" ) {
+      $problemcount++;
+      $problemmsg .= "controller not active ";
+    }
+  }
+
+  if ( $problemcount > 0 ) {
+    print "CONTROLLER CRITICAL - $problemcount $problemmsg\n";
+    exit 2
+  }
+  else {
+    print "CONTROLLER OK - $ctrlcount controller(s) active\n";
     exit 0
   }
 
