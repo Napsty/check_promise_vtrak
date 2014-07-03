@@ -603,12 +603,12 @@ case "spare" {
       my @oidlist = ("$oid_spare_id.$oidend");
       my $response = $session->get_request(-varbindlist => \@oidlist);
       my $spareid = $$response{"$oid_spare_id.$oidend"};
-      print "Spare ID: $spareid\n"; #debug      
+      #print "Spare ID: $spareid\n"; #debug      
       # get the physical drive id
       my @oidlist2 = ("$oid_spare_physdrv.$oidend");
       my $response2 = $session->get_request(-varbindlist => \@oidlist2);
       my $physdrv = $$response2{"$oid_spare_physdrv.$oidend"};
-      print "Physical drive: $physdrv\n"; #debug
+      #print "Physical drive: $physdrv\n"; #debug
       $problemcount++;
       $problemmsg .= "- physical drive $physdrv ";
     }
