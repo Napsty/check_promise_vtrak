@@ -598,7 +598,7 @@ case "spare" {
     #print "Key: $key\n"; # debug
     #print "Value: $value{$key}\n"; # debug
     my $oidend = (split(/\./, $key))[-1];
-    if( ( "$value{$key}" ne "NOK" ) ) {
+    if( ( "$value{$key}" ne "OK" ) ) {
       # get the spare id
       my @oidlist = ("$oid_spare_id.$oidend");
       my $response = $session->get_request(-varbindlist => \@oidlist);
