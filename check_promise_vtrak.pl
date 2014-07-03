@@ -35,8 +35,9 @@
 # 20140701 Added fan check type (ck)
 # 20140702 Added ctrl check type (ck)
 # 20140702 Merged disk and diskonline checks (ck)
+# 20140703 Added spare check type (ck)
 #########################################################################
-my $version = '20140702';
+my $version = '20140703';
 #########################################################################
 use strict;
 use Getopt::Long;
@@ -89,7 +90,10 @@ my $oid_disk_pfa = '';
 my $oid_disk_rebuilding = '';
 my $oid_disk_missing = '';
 my $oid_disk_unconfigured = '';
-my $oid_disk_sparenumber = '';
+my $oid_spare_present = '';
+my $oid_spare_id = '';
+my $oid_spare_opstatus = '';
+my $oid_spare_physdrv = '';
 my $oid_fan_opstatus = '';
 my $oid_temp_current = '';
 my $oid_temp_opstatus = '';
@@ -139,16 +143,15 @@ Options:
 -C\tSNMP community name (if not set, public will be used).
 -m\tModel of the Vtrak. Currently supported: E310x, E610x, M610x
 -t\tType to check. See below for valid types.
--w\tWarning threshold (not working on all checks)
--c\tCritical threshold (not working on all checks)
 --help\tShow this help/usage.\n
 Check Types:
-ctrl\t\t -> Checks the status of all controllers
-disk\t\t -> Checks the status of all physical disks
+ctrl\t\t -> Check status of all controllers
+disk\t\t -> Check status of all physical disks
 enclosure\t -> Check status of all enclosures
 fan\t\t -> Check status of all fans (blowers)
 info\t\t -> Show basic information of the Vtrak
-ps\t\t -> Check status of all power supplies\n";
+ps\t\t -> Check status of all power supplies
+spare\t\t -> Check the status of all spare disks\n";
 }
 #########################################################################
 # OID Definition
@@ -178,7 +181,10 @@ if ( $model =~ m/(E310|E610|M610)/) {
   $oid_disk_rebuilding = "$oid_base.1.3.1.23.1.1";
   $oid_disk_missing = "$oid_base.1.3.1.24.1.1";
   $oid_disk_unconfigured = "$oid_base.1.3.1.25.1.1";
-  $oid_disk_sparenumber = "$oid_base.2.4.1.14";
+  $oid_spare_present = "$oid_base.1.3.1.30.1.1";
+  $oid_spare_id = "$oid_base.2.6.1.1.1";
+  $oid_spare_opstatus = "$oid_base.2.6.1.2.1";
+  $oid_spare_physdrv = "$oid_base.2.6.1.3.1";
   $oid_fan_opstatus = "$oid_base.1.11.1.3.1.1";
   $oid_temp_current = "$oid_base.1.13.1.2.1.1";
   $oid_temp_opstatus = "$oid_base.1.13.1.3.1.1";
@@ -210,7 +216,10 @@ elsif ( $model =~ m/(M200)/) {
   $oid_disk_rebuilding = "$oid_base.1.2.1.1.24.1";
   $oid_disk_missing = "$oid_base.1.2.1.1.25.1";
 #  $oid_disk_unconfigured = "$oid_base.1.3.1.25";
-#  $oid_disk_sparenumber = "$oid_base.2.4.1.14";
+#  $oid_spare_present = "$oid_base.1.3.1.30.1.1";
+#  $oid_spare_id = "$oid_base.2.6.1.1.1";
+#  $oid_spare_opstatus = "$oid_base.2.6.1.2.1";
+#  $oid_spare_physdrv = "$oid_base.2.6.1.3.1";
   $oid_fan_opstatus = ".1.3.6.1.4.1.7933.2.1.3.1.1.3.1";
   $oid_temp_current = ".1.3.6.1.4.1.7933.2.1.5.1.1.2.1";
   $oid_temp_opstatus = ".1.3.6.1.4.1.7933.2.1.5.1.1.3.1";
@@ -559,6 +568,58 @@ case "ctrl" {
   }
   else {
     print "CONTROLLER OK - $ctrlcount controller(s) active\n";
+    exit 0
+  }
+
+}
+# --------- spare --------- #
+# Checks the health status of defined spare disks
+case "spare" {
+  my $result = $session->get_table(-baseoid => $oid_spare_opstatus);
+  my @oidlist = ($oid_spare_present);
+  my $result2 = $session->get_request(-varbindlist => \@oidlist);
+
+  if (!defined($result) || !defined($result2)) {
+    printf("ERROR: Description table : %s.\n", $session->error);
+  if ($session->error =~ m/noSuchName/ || $session->error =~ m/does not exist/) {
+    print "Are you really sure the target host is a $model???!\n";
+  }
+  $session->close;
+  exit 2;
+ }
+
+  my %value = %{$result};
+  my $key;
+  my $sparecount = $$result2{$oid_spare_present};
+  my $problemcount = 0;
+  my $problemmsg = '';
+
+  foreach $key (keys %{$result}) {
+    #print "Key: $key\n"; # debug
+    #print "Value: $value{$key}\n"; # debug
+    my $oidend = (split(/\./, $key))[-1];
+    if( ( "$value{$key}" ne "NOK" ) ) {
+      # get the spare id
+      my @oidlist = ("$oid_spare_id.$oidend");
+      my $response = $session->get_request(-varbindlist => \@oidlist);
+      my $spareid = $$response{"$oid_spare_id.$oidend"};
+      print "Spare ID: $spareid\n"; #debug      
+      # get the physical drive id
+      my @oidlist2 = ("$oid_spare_physdrv.$oidend");
+      my $response2 = $session->get_request(-varbindlist => \@oidlist2);
+      my $physdrv = $$response2{"$oid_spare_physdrv.$oidend"};
+      print "Physical drive: $physdrv\n"; #debug
+      $problemcount++;
+      $problemmsg .= "- physical drive $physdrv ";
+    }
+  }
+
+  if ( $problemcount > 0 ) {
+    print "SPARE CRITICAL - $problemcount spare drive not ok $problemmsg\n";
+    exit 2
+  }
+  else {
+    print "SPARE OK - $sparecount spare(s) configured\n";
     exit 0
   }
 
