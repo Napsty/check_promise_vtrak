@@ -6,7 +6,7 @@
 # License:      MIT
 # Copyright:    2007 Barry O'Donovan (bod) - http://www.barryodonovan.com/
 # Copyright:    2007 Open Source Solutions Ltd - http://www.opensolutions.ie/
-# Copyright:    2014 Claudio Kuenzler (ck) - http://www.claudiokuenzler.com/
+# Copyright:    2014,2021 Claudio Kuenzler (ck) - http://www.claudiokuenzler.com/
 # Usage:        ./check_promise_vtrak.pl -H <host> [-C <community>] -m <model> -t <type>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of 
@@ -36,8 +36,9 @@
 # 20140702 Added ctrl check type (ck)
 # 20140702 Merged disk and diskonline checks (ck)
 # 20140703 Added spare check type (ck)
+# 20211110 Added VessRaid device (ck)
 #########################################################################
-my $version = '20140703';
+my $version = '20211110';
 #########################################################################
 use strict;
 use Getopt::Long;
@@ -141,7 +142,7 @@ Usage: ./check_promise_vtrak.pl -H host [-p port] [-C community] -m model -t che
 Options:
 -H\tHostname or IP address of the Promise Vtrak Head
 -C\tSNMP community name (if not set, public will be used).
--m\tModel of the Vtrak. Currently supported: E310x, E610x, M610x
+-m\tModel of the Vtrak. Currently supported: E310x, E610x, M610x, 1840i (VessRaid)
 -t\tType to check. See below for valid types.
 --help\tShow this help/usage.\n
 Check Types:
@@ -155,7 +156,7 @@ spare\t\t -> Check the status of all spare disks\n";
 }
 #########################################################################
 # OID Definition
-if ( $model =~ m/(E310|E610|M610)/) {
+if ( $model =~ m/(E310|E610|M610|1840i)/) {
   $oid_base = '.1.3.6.1.4.1.7933.1.20';
   $oid_model = "$oid_base.1.2.1.4.1";
   $oid_vendorname = "$oid_base.1.2.1.3.1";
